@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 가상환경
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# 환경 설정
+.env
+
+# 업로드 및 대용량 파일
+input/
+output/
+uploads/
+*.pptx
