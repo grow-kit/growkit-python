@@ -1,3 +1,6 @@
-fastapi
+fastapi~=0.115.12
 uvicorn
-python-pptx
+python-pptx~=1.0.2
+openai~=1.87.0
+python-dotenv~=1.1.0
+pydantic~=2.11.7
