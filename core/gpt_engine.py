@@ -2,6 +2,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 import requests
+from fastapi import HTTPException
 
 ## 최신버전은 이 방법을 사용해야 한다 ##
 load_dotenv()  # .env 파일에서 환경변수 로드
@@ -13,6 +14,7 @@ def fetch_manual(manual_id: int) -> str:
     url = f"http://localhost:9000/api/manuals/{manual_id}"
     res = requests.get(url)
 
+    ## 메뉴얼이 업을 경우
     if res.status_code != 200:
         raise ValueError(f"메뉴얼 ID {manual_id}에 해당하는 데이터를 찾을 수 없습니다.")
 
@@ -22,7 +24,16 @@ def fetch_manual(manual_id: int) -> str:
 
 # 문항 생성 함수
 def generate_question_with_manual(manual_id: int):
-    manual = fetch_manual(manual_id)
+    # 메뉴얼이 DB에 등록되어있지 않을 경우 오류 처리
+    try:
+        manual = fetch_manual(manual_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+    # 메뉴얼 내용이 비어있을 경우 오류 처리
+    if not manual.strip():
+        raise HTTPException(status_code=400, detail="매뉴얼 내용이 비어 있어 문항을 생성할 수 없습니다.")
+
     print("메뉴얼 내용:", manual)
 
     prompt = f"""
@@ -51,8 +62,8 @@ def generate_question_with_manual(manual_id: int):
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system",
-             "content": "절대 과거 대화, 형식, 문장을 기억하지 마. 지금 이 요청만 완전히 처음 보는 것처럼 처리해. 이전 대화와 관련된 추론은 금지야. 이건 완전히 새로운 대화야."},
+            # {"role": "system",
+            #  "content": "절대 과거 대화, 형식, 문장을 기억하지 마. 지금 이 요청만 완전히 처음 보는 것처럼 처리해. 이전 대화와 관련된 추론은 금지야. 이건 완전히 새로운 대화야."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.0
