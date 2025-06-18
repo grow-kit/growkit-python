@@ -5,14 +5,34 @@
 from fastapi import APIRouter, File, UploadFile
 from domains.evaluation.service import transcribe_audio
 from domains.evaluation.schemas import TranscriptionResult
+from domains.evaluation.schemas import EvaluationRequest
+from core.gpt_engine import generate_question_with_manual
+from core.gpt_engine import generate_feedback
 
 router = APIRouter()
 
 import os
 
+# 음성 테스트
 @router.post("/test", response_model=TranscriptionResult)
 async def test(file: UploadFile = File(...)):
     binary = await file.read()
     ext = os.path.splitext(file.filename)[-1] or ".mp3"
     text = transcribe_audio(binary, suffix=ext)
     return TranscriptionResult(text=text)
+# end def
+
+
+# 문항 생성 요청
+@router.get("/generate-question/{manual_id}")
+async def get_question(manual_id: int):
+    question = generate_question_with_manual(manual_id)
+    return {"question": question}
+# end def
+
+# 분석 및 피드백 요청
+@router.post("/analyze-response")
+async def analyze_response(request: EvaluationRequest):
+    result = generate_feedback(request.question, request.answer, request.emotion)
+    return result
+# end def

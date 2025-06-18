@@ -10,3 +10,9 @@ from pydantic import BaseModel
 
 class TranscriptionResult(BaseModel):
     text: str  # Whisper 결과 텍스트
+
+# 응답 분석 API
+class EvaluationRequest(BaseModel):
+    question: str
+    answer: str
+    emotion: dict

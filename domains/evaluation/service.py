@@ -7,6 +7,7 @@ import tempfile
 
 model = whisper.load_model("base")
 
+# 음성 테스트
 def transcribe_audio(binary_data: bytes, suffix=".mp3") -> str:
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
         temp_file.write(binary_data)
