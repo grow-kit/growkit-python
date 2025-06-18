@@ -3,6 +3,7 @@
 #Controller 역할
 
 from fastapi import APIRouter, File, UploadFile
+from fastapi import HTTPException
 from domains.evaluation.service import transcribe_audio
 from domains.evaluation.schemas import TranscriptionResult
 from domains.evaluation.schemas import EvaluationRequest
@@ -26,8 +27,12 @@ async def test(file: UploadFile = File(...)):
 # 문항 생성 요청
 @router.get("/generate-question/{manual_id}")
 async def get_question(manual_id: int):
-    question = generate_question_with_manual(manual_id)
-    return {"question": question}
+    try:
+        question = await generate_question_with_manual(manual_id)
+        return {"question": question}
+    except HTTPException as e:
+        # FastAPI에 다시 예외 전달
+        raise e
 # end def
 
 # 분석 및 피드백 요청
