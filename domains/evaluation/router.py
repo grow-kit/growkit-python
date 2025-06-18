@@ -6,13 +6,10 @@ import os
 
 from fastapi import APIRouter, File, UploadFile
 from fastapi import HTTPException
-from domains.evaluation.service import transcribe_audio
-from domains.evaluation.schemas import TranscriptionResult
 from domains.evaluation.schemas import EvaluationRequest
 from core.gpt_engine import generate_question_with_manual
 from core.gpt_engine import generate_feedback
-from domains.evaluation.service import transcribe_audio, analyze_video_all
-from domains.evaluation.schemas import TranscriptionResult,AnalysisResult
+from domains.evaluation.schemas import TranscriptionResult
 from domains.evaluation.service import analyze_video_all
 from domains.evaluation.schemas import AnalysisResult
 
@@ -20,12 +17,12 @@ router = APIRouter()
 
 import os
 
-@router.post("/test", response_model=TranscriptionResult)
-async def test(file: UploadFile = File(...)):
-    binary = await file.read()
-    ext = os.path.splitext(file.filename)[-1] or ".mp3"
-    text = transcribe_audio(binary, suffix=ext)
-    return TranscriptionResult(text=text)
+# @router.post("/test", response_model=TranscriptionResult)
+# async def test(file: UploadFile = File(...)):
+#     binary = await file.read()
+#     ext = os.path.splitext(file.filename)[-1] or ".mp3"
+#     text = transcribe_audio(binary, suffix=ext)
+#     return TranscriptionResult(text=text)
 # end def
 
 
@@ -54,7 +51,6 @@ async def analyze_from_single_video(video: UploadFile = File(...)):
     result = analyze_video_all(binary)
     return AnalysisResult(
         text=result["text"],
-        emotion=result["emotion"],
         head_pose={
             "head_yaw": result["gaze_direction"],
             "head_pitch": result["head_motion"]
