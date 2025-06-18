@@ -24,13 +24,13 @@ def fetch_manual(manual_id: int) -> str:
 
 # 문항 생성 함수
 def generate_question_with_manual(manual_id: int):
-    # 메뉴얼이 DB에 등록되어있지 않을 경우 오류 처리
+    # 메뉴얼이 DB에 등록되어있지 않을 경우 예외 처리
     try:
         manual = fetch_manual(manual_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
-    # 메뉴얼 내용이 비어있을 경우 오류 처리
+    # 메뉴얼 내용이 비어있을 경우 예외 처리
     if not manual.strip():
         raise HTTPException(status_code=400, detail="매뉴얼 내용이 비어 있어 문항을 생성할 수 없습니다.")
 
