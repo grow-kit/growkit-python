@@ -2,6 +2,8 @@
 #실제 HTTP 요청을 처리하는 엔드포인트 정의
 #Controller 역할
 
+import os
+
 from fastapi import APIRouter, File, UploadFile
 from fastapi import HTTPException
 from domains.evaluation.service import transcribe_audio
@@ -11,6 +13,8 @@ from core.gpt_engine import generate_question_with_manual
 from core.gpt_engine import generate_feedback
 from domains.evaluation.service import transcribe_audio, analyze_video_all
 from domains.evaluation.schemas import TranscriptionResult,AnalysisResult
+from domains.evaluation.service import analyze_video_all
+from domains.evaluation.schemas import AnalysisResult
 
 router = APIRouter()
 

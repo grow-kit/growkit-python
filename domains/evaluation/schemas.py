@@ -22,5 +22,5 @@ class EvaluationRequest(BaseModel):
 
 class AnalysisResult(BaseModel):
     text: str
-    emotion: str
-    head_pose: Dict[str, str]  # 예: {"head_yaw": "moving", "head_pitch": "stable"}
+    head_pose: Dict[str, str]  # 예: {"head_yaw": "정면", "head_pitch": "안정적"}
+
