@@ -9,12 +9,13 @@ from domains.evaluation.schemas import TranscriptionResult
 from domains.evaluation.schemas import EvaluationRequest
 from core.gpt_engine import generate_question_with_manual
 from core.gpt_engine import generate_feedback
+from domains.evaluation.service import transcribe_audio, analyze_video_all
+from domains.evaluation.schemas import TranscriptionResult,AnalysisResult
 
 router = APIRouter()
 
 import os
 
-# 음성 테스트
 @router.post("/test", response_model=TranscriptionResult)
 async def test(file: UploadFile = File(...)):
     binary = await file.read()
@@ -41,3 +42,17 @@ async def analyze_response(request: EvaluationRequest):
     result = generate_feedback(request.question, request.answer, request.emotion)
     return result
 # end def
+
+
+@router.post("/audio-video", response_model=AnalysisResult)
+async def analyze_from_single_video(video: UploadFile = File(...)):
+    binary = await video.read()
+    result = analyze_video_all(binary)
+    return AnalysisResult(
+        text=result["text"],
+        emotion=result["emotion"],
+        head_pose={
+            "head_yaw": result["gaze_direction"],
+            "head_pitch": result["head_motion"]
+        }
+    )

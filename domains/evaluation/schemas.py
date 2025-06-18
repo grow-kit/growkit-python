@@ -7,6 +7,8 @@
 # domains/evaluation/schemas.py
 
 from pydantic import BaseModel
+from typing import Dict
+
 
 class TranscriptionResult(BaseModel):
     text: str  # Whisper 결과 텍스트
@@ -16,3 +18,9 @@ class EvaluationRequest(BaseModel):
     question: str
     answer: str
     emotion: dict
+
+
+class AnalysisResult(BaseModel):
+    text: str
+    emotion: str
+    head_pose: Dict[str, str]  # 예: {"head_yaw": "moving", "head_pitch": "stable"}
