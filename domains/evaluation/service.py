@@ -92,3 +92,5 @@ def analyze_video_all(binary_video: bytes) -> dict:
         "gaze_direction": pose_result["gaze_direction"],
         "head_motion": pose_result["head_stability"]
     }
+
+

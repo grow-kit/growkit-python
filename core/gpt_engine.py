@@ -86,7 +86,6 @@ def generate_feedback(question: str, answer: str, emotion: dict):
     prompt = f"""
 질문: {question}
 답변: {answer}
-감정 분석: {emotion}
 
 위 내용을 바탕으로 피드백과 5점 만점 기준 점수를 채점해 주세요.
 """
@@ -103,3 +102,40 @@ def generate_feedback(question: str, answer: str, emotion: dict):
         "score": 4.5
     }
 # end def
+
+def generate_feedback(question: str, answer: str, emotion: dict):
+    prompt = f"""
+[문제]
+{question}
+
+[답변]
+{answer}
+
+[시선/고개 움직임]
+- 시선: {emotion.get("gaze", "알 수 없음")}
+- 고개 움직임: {emotion.get("head", "알 수 없음")}
+
+이 답변에 대해 다음 기준으로 5점 만점 채점을 해주세요:
+1. 친절도
+2. 문제해결능력
+3. 소통능력
+4. 전문성
+5. 감정조절
+6. 태도
+
+각 항목에 대해 점수(예: 4.5/5)와 간단한 피드백을 주세요.  
+마지막엔 총평도 포함해주세요.
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
+
+    content = response.choices[0].message.content
+
+    return {
+        "feedback": content,
+        "score": 4.5  # → 정규표현식으로 점수 파싱도 가능
+    }
