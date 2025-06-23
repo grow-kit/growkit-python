@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 import requests
 from fastapi import HTTPException
 import httpx
+import re
+
 
 ## 최신버전은 이 방법을 사용해야 한다 ##
 load_dotenv()  # .env 파일에서 환경변수 로드
@@ -103,6 +105,23 @@ def generate_feedback(question: str, answer: str, emotion: dict):
     }
 # end def
 
+def extract_scores_from_text(feedback_text: str) -> dict:
+    """GPT 출력에서 항목별 점수를 파싱"""
+    criteria = ["친절도", "문제해결능력", "소통능력", "전문성", "감정조절", "태도"]
+    scores = {}
+
+    for criterion in criteria:
+        # 예: "친절도: 4.5" 또는 "친절도 : 5"
+        match = re.search(rf"{criterion}\s*[:：]\s*(\d+(\.\d+)?)", feedback_text)
+        if match:
+            scores[criterion] = round(float(match.group(1)))
+        else:
+            scores[criterion] = 0  # 점수 인식 실패 시 기본 0점
+
+    return scores
+# end def
+
+
 def generate_feedback(question: str, answer: str, emotion: dict):
     prompt = f"""
 [문제]
@@ -111,11 +130,17 @@ def generate_feedback(question: str, answer: str, emotion: dict):
 [답변]
 {answer}
 
-[시선/고개 움직임]
-- 시선: {emotion.get("gaze", "알 수 없음")}
+[시선/고개 움직임 분석 결과]
+- 시선 방향: {emotion.get("gaze", "알 수 없음")}
 - 고개 움직임: {emotion.get("head", "알 수 없음")}
 
-이 답변에 대해 다음 기준으로 5점 만점 채점을 해주세요:
+[주의 사항]
+- 정면을 잘 응시했다면 '소통능력'과 '태도' 항목의 점수를 높게 주세요.
+- 고개 움직임이 안정적이라면 '감정조절'과 '전문성' 점수도 높게 평가해 주세요.
+- 반대로 시선을 회피하거나, 고개를 자주 움직이면 해당 항목 점수를 낮춰 주세요.
+
+위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평도 작성해 주세요:
+
 1. 친절도
 2. 문제해결능력
 3. 소통능력
@@ -123,8 +148,11 @@ def generate_feedback(question: str, answer: str, emotion: dict):
 5. 감정조절
 6. 태도
 
-각 항목에 대해 점수(예: 4.5/5)와 간단한 피드백을 주세요.  
-마지막엔 총평도 포함해주세요.
+[출력 예시]
+- 친절도: 4.5
+- 문제해결능력: 4.0
+...
+- 총평: 전반적으로 안정적인 태도와 정중한 언행을 보였습니다.
 """
 
     response = client.chat.completions.create(
@@ -133,9 +161,12 @@ def generate_feedback(question: str, answer: str, emotion: dict):
         temperature=0.7
     )
 
-    content = response.choices[0].message.content
+    feedback_text = response.choices[0].message.content
+
+    scores = extract_scores_from_text(feedback_text)
 
     return {
-        "feedback": content,
-        "score": 4.5  # → 정규표현식으로 점수 파싱도 가능
+        "feedback": feedback_text,  # 전체 피드백 텍스트
+        "score": scores             # ✅ 항목별 점수 딕셔너리
     }
+#end def

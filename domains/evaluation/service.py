@@ -6,6 +6,31 @@ import cv2
 from faster_whisper import WhisperModel
 from moviepy.editor import VideoFileClip
 import tempfile
+import subprocess
+
+# 영상 처리 로직
+def fix_video_metadata(input_path: str) -> str:
+    output_path = input_path.replace(".mp4", "_fixed.mp4")
+    # 🔍 실제 컨테이너 검사: 웹M이면 mp4로 변환
+    if input_path.endswith(".webm"):
+        output_path = input_path.replace(".webm", "_converted.mp4")
+        cmd = [
+            "ffmpeg", "-i", input_path,
+            "-c:v", "libx264", "-c:a", "aac",
+            "-movflags", "faststart",
+            output_path
+        ]
+    else:
+        cmd = [
+            "ffmpeg", "-i", input_path,
+            "-c:v", "copy", "-c:a", "copy",
+            "-movflags", "faststart",
+            output_path
+        ]
+
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return output_path
+#end def
 
 # Whisper 모델 (빠른 버전)
 stt_model = WhisperModel("base", device="cpu", compute_type="int8")
@@ -17,8 +42,10 @@ eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml
 
 # 🎙️ 영상에서 음성 추출 → STT 텍스트 변환
 def transcribe_audio_from_video(video_path: str) -> str:
+    fixed_path = fix_video_metadata(video_path)
     audio_path = video_path.replace(".mp4", ".wav")
-    clip = VideoFileClip(video_path)
+
+    clip = VideoFileClip(fixed_path)
     clip.audio.write_audiofile(audio_path, verbose=False, logger=None)
     clip.close()  # ✅ 파일 점유 해제
 
@@ -26,6 +53,7 @@ def transcribe_audio_from_video(video_path: str) -> str:
     text = " ".join([segment.text for segment in segments])
 
     os.remove(audio_path)
+    os.remove(fixed_path)  # ✅ 재인코딩된 영상도 정리
     return text
 
 
@@ -92,5 +120,7 @@ def analyze_video_all(binary_video: bytes) -> dict:
         "gaze_direction": pose_result["gaze_direction"],
         "head_motion": pose_result["head_stability"]
     }
+
+
 
 
