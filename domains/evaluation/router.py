@@ -29,17 +29,14 @@ async def get_question(manual_id: int):
     except HTTPException as e:
         # FastAPI에 다시 예외 전달
         raise e
-
-
 # end def
+
 
 # 분석 및 피드백 요청
 @router.post("/analyze-response")
 async def analyze_response(request: EvaluationRequest):
     result = generate_feedback(request.question, request.answer, request.emotion)
     return result
-
-
 # end def
 
 

@@ -55,11 +55,12 @@ async def generate_question_with_manual(manual_id: int):
     {manual}
 
     [조건]
-    - 메뉴얼을 참고하여, 서비스직원이 실제 겪을 수 있는 상황 한 가지를 작성해.
+    - 메뉴얼을 참고하여, 서비스직원이 실제 겪을 수 있는 상황 한 가지를 작성해. 
+    - 너무 매뉴얼에 갇히지 말고 창의성을 발휘해서 너가 생각하는 카페에서 일어날 수 있는 다양한 상황 중에 하나를 골라서 제시해. (예시: 진상 손님, 나이가 많은 노인, 메뉴 추천 요청하는 손님, 무리한 요청을 하는 손님 등)
     - 절대 예시, 번호, 유형 등을 넣지 마.
     - 무조건 하나의 상황만 작성해.
     - 출력은 단 한 문장만. 다른 말, 설명, 앞말 없이 바로 "상황 설명 : ..." 형식으로만 출력.
-
+    
     [출력 예시]
     상황 설명 : 한 고객이 주문한 음료를 받고 나서, 맛이 다르다며 불만을 제기하고 있습니다.
 
@@ -77,33 +78,33 @@ async def generate_question_with_manual(manual_id: int):
             #  "content": "절대 과거 대화, 형식, 문장을 기억하지 마. 지금 이 요청만 완전히 처음 보는 것처럼 처리해. 이전 대화와 관련된 추론은 금지야. 이건 완전히 새로운 대화야."},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.0
+        temperature=0.7
     )
     return response.choices[0].message.content
 # end def
 
 
 # 분석 및 피드백 함수
-def generate_feedback(question: str, answer: str, emotion: dict):
-    prompt = f"""
-질문: {question}
-답변: {answer}
-
-위 내용을 바탕으로 피드백과 5점 만점 기준 점수를 채점해 주세요.
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
-    )
-
-    content = response.choices[0].message.content
-    return {
-        "feedback": content,
-        "score": 4.5
-    }
-# end def
+# def generate_feedback(question: str, answer: str, emotion: dict):
+#     prompt = f"""
+# 질문: {question}
+# 답변: {answer}
+#
+# 위 내용을 바탕으로 피드백과 5점 만점 기준 점수를 채점해 주세요.
+# """
+#
+#     response = client.chat.completions.create(
+#         model="gpt-4",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7
+#     )
+#
+#     content = response.choices[0].message.content
+#     return {
+#         "feedback": content,
+#         "score": 4.5
+#     }
+# # end def
 
 def extract_scores_from_text(feedback_text: str) -> dict:
     """GPT 출력에서 항목별 점수를 파싱"""
@@ -139,13 +140,13 @@ def generate_feedback(question: str, answer: str, emotion: dict):
 - 고개 움직임이 안정적이라면 '감정조절'과 '전문성' 점수도 높게 평가해 주세요.
 - 반대로 시선을 회피하거나, 고개를 자주 움직이면 해당 항목 점수를 낮춰 주세요.
 
-위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평도 작성해 주세요:
+위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평(분석 + 피드백)도 작성해 주세요:
 
-1. 친절도
+1. 친절함
 2. 문제해결능력
-3. 소통능력
+3. 전달력
 4. 전문성
-5. 감정조절
+5. 침착성
 6. 태도
 
 [출력 예시]
