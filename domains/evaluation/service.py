@@ -109,16 +109,30 @@ def analyze_video_all(binary_video: bytes) -> dict:
         temp_file.flush()
         video_path = temp_file.name
 
+    stt_text = "음성 인식 실패"
+    pose_result = {
+        "gaze_direction": "알 수 없음",
+        "head_stability": "알 수 없음"
+    }
+
     try:
-        stt_text = transcribe_audio_from_video(video_path)
-        pose_result = analyze_pose_only(video_path)
+        try:
+            stt_text = transcribe_audio_from_video(video_path)
+        except Exception as e:
+            print(f"🎙️ 음성 분석 실패: {e}")
+
+        try:
+            pose_result = analyze_pose_only(video_path)
+        except Exception as e:
+            print(f"👁️ 시선 분석 실패: {e}")
+
     finally:
         os.remove(video_path)
 
     return {
         "text": stt_text,
-        "gaze_direction": pose_result["gaze_direction"],
-        "head_motion": pose_result["head_stability"]
+        "gaze_direction": pose_result.get("gaze_direction", "알 수 없음"),
+        "head_motion": pose_result.get("head_stability", "알 수 없음")
     }
 
 

@@ -27,8 +27,6 @@ async def fetch_manual(manual_id: int) -> str:
         raise ValueError(f"메뉴얼 ID {manual_id}에 content가 존재하지 않습니다.")
 
     return content
-
-
 # end def
 
 
@@ -82,8 +80,6 @@ async def generate_question_with_manual(manual_id: int):
         temperature=0.7
     )
     return response.choices[0].message.content
-
-
 # end def
 
 
@@ -113,9 +109,7 @@ def extract_scores_from_text(feedback_text: str) -> dict:
     """GPT 출력에서 항목별 점수를 파싱"""
     criteria = ["친절도", "문제해결능력", "소통능력", "전문성", "감정조절", "태도"]
     scores = {}
-
     for criterion in criteria:
-        # 예: "친절도: 4.5" 또는 "친절도 : 5"
         match = re.search(rf"{criterion}\s*[:：]\s*(\d+(\.\d+)?)", feedback_text)
         if match:
             scores[criterion] = round(float(match.group(1)))
@@ -179,12 +173,6 @@ def generate_feedback_with_criteria(question, answer, emotion, manual, criteria)
         additional_notes += "- 고개 움직임 정보가 없으므로 '감정조절'과 '전문성' 평가에는 반영하지 마세요.\n"
 
     prompt = f"""
-[메뉴얼]
-{manual}
-
-[평가 기준]
-{criteria}
-
 [문제]
 {question}
 
@@ -228,3 +216,4 @@ def generate_feedback_with_criteria(question, answer, emotion, manual, criteria)
     result["score"] = extract_scores_from_text(feedback_text)
 
     return result
+#end def

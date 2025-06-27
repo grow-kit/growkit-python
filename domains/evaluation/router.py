@@ -32,12 +32,12 @@ async def get_question(manual_id: int):
 # end def
 
 
-# # 분석 및 피드백 요청
+# 분석 및 피드백 요청
 # @router.post("/analyze-response")
 # async def analyze_response(request: EvaluationRequest):
 #     result = generate_feedback(request.question, request.answer, request.emotion)
 #     return result
-# # end def
+# end def
 
 
 @router.post("/audio-video", response_model=AnalysisResult)
@@ -95,3 +95,8 @@ async def submit_answer(
         "score": gpt_result["score"],
         "feedback": gpt_result["feedback"]
     }
+
+
+
+
+
