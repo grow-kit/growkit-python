@@ -110,9 +110,7 @@ def extract_scores_from_text(feedback_text: str) -> dict:
     """GPT 출력에서 항목별 점수를 파싱"""
     criteria = ["친절도", "문제해결능력", "소통능력", "전문성", "감정조절", "태도"]
     scores = {}
-
     for criterion in criteria:
-        # 예: "친절도: 4.5" 또는 "친절도 : 5"
         match = re.search(rf"{criterion}\s*[:：]\s*(\d+(\.\d+)?)", feedback_text)
         if match:
             scores[criterion] = round(float(match.group(1)))
@@ -125,6 +123,12 @@ def extract_scores_from_text(feedback_text: str) -> dict:
 
 def generate_feedback(question: str, answer: str, emotion: dict):
     prompt = f"""
+[메뉴얼]
+{manual}
+
+[평가 기준]
+{criteria}
+
 [문제]
 {question}
 
@@ -132,13 +136,14 @@ def generate_feedback(question: str, answer: str, emotion: dict):
 {answer}
 
 [시선/고개 움직임 분석 결과]
-- 시선 방향: {emotion.get("gaze", "알 수 없음")}
-- 고개 움직임: {emotion.get("head", "알 수 없음")}
+- 시선 방향: {gaze}
+- 고개 움직임: {head}
 
 [주의 사항]
 - 정면을 잘 응시했다면 '소통능력'과 '태도' 항목의 점수를 높게 주세요.
 - 고개 움직임이 안정적이라면 '감정조절'과 '전문성' 점수도 높게 평가해 주세요.
 - 반대로 시선을 회피하거나, 고개를 자주 움직이면 해당 항목 점수를 낮춰 주세요.
+{additional_notes}
 
 위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평(분석 + 피드백)도 작성해 주세요:
 
@@ -163,11 +168,8 @@ def generate_feedback(question: str, answer: str, emotion: dict):
     )
 
     feedback_text = response.choices[0].message.content
+    result["feedback"] = feedback_text
+    result["score"] = extract_scores_from_text(feedback_text)
 
-    scores = extract_scores_from_text(feedback_text)
-
-    return {
-        "feedback": feedback_text,  # 전체 피드백 텍스트
-        "score": scores             # ✅ 항목별 점수 딕셔너리
-    }
+    return result
 #end def
