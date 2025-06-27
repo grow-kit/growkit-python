@@ -4,11 +4,17 @@ __pycache__/
 
 # 가상환경
 .venv/
+#가상 환경
+venv/
 
 # IDE
 .idea/
 .vscode/
+#파이썬 캐시
+__pycache__/
+*.pyc
 
+#환경 변수
 # 환경 설정
 .env
 
