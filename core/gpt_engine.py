@@ -119,22 +119,15 @@ def extract_scores_from_text(feedback_text: str) -> dict:
     return scores
 # end def
 
-# 메뉴얼 받아오기 함수
-async def fetch_manual(manual_id: int) -> str:
-    url = f"http://localhost:9000/api/manuals/{manual_id}"
-    async with httpx.AsyncClient() as client:
-        res = await client.get(url)
-
-    if res.status_code != 200:
-        raise ValueError(f"메뉴얼 ID {manual_id}에 해당하는 데이터를 찾을 수 없습니다.")
-
-    data = res.json()
-    content = data.get("content")
-
-    if not content:
-        raise ValueError(f"메뉴얼 ID {manual_id}에 content가 존재하지 않습니다.")
-
-    return content
+def is_meaningless(text: str) -> bool:
+    stripped = text.strip()
+    if len(stripped) < 5:
+        return True
+    if re.fullmatch(r"[ㄱ-ㅎㅏ-ㅣ]+", stripped):
+        return True
+    if stripped in {"ㄷㄷㄷ", "ㅋㅋㅋ", "ㅎㅎㅎ", "ㅁㅁㅁ", "ㅠㅠㅠ", "...", "....."}:
+        return True
+    return False
 # end def
 
 # 평가 기준 받아오기 함수
@@ -157,7 +150,7 @@ def generate_feedback_with_criteria(question, answer, emotion, manual, criteria)
     }
 
     # 1. 답변 무효 조건 처리
-    if answer.strip() == "음성 인식 실패" or len(answer.strip()) < 5:
+    if is_meaningless(answer):
         result["feedback"] = "⚠️ 답변이 정상적으로 인식되지 않아 평가가 불가능합니다. 문의 후 재평가 요청을 진행해 주세요."
         result["score"] = {}
         return result
@@ -172,7 +165,34 @@ def generate_feedback_with_criteria(question, answer, emotion, manual, criteria)
     if head == "알 수 없음":
         additional_notes += "- 고개 움직임 정보가 없으므로 '감정조절'과 '전문성' 평가에는 반영하지 마세요.\n"
 
-    prompt = f"""
+    prompt = f"""    
+너는 지금 스타벅스 직원의 모의 시뮬레이션 평가를 담당하고 있어.
+   
+[요청 사항]
+- 메뉴얼을 참고해서 응시자의 답변을 채점 해주세요.
+- 점수 채점을 진행할 때 평가 기준을 참고 해주세요.
+- 각 항목을 5점 만점으로 채점하고, 아래 형식으로 마지막에는 총평을 출력해 주세요.
+- 총평에는 평과 결과와 피드백으로 구성해 주세요.
+- 점수가 낮은 항목(3.5 이하)은 반드시 개선 방향도 함께 제시할 것.
+
+
+위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점해주세요.
+
+1. 친절도
+2. 문제해결능력
+3. 소통능력
+4. 전문성
+5. 감정조절
+6. 태도
+
+※ 각 항목별 점수 옆에 첨언하지 않는다.
+
+[예시 출력 형식]
+- 친절도: 4.5
+- 문제해결능력: 4.0
+...
+- 총평: 전반적으로 침착했으나, 소통의 명확성이 조금 더 필요합니다.
+               
 [문제]
 {question}
 
@@ -183,26 +203,17 @@ def generate_feedback_with_criteria(question, answer, emotion, manual, criteria)
 - 시선 방향: {gaze}
 - 고개 움직임: {head}
 
+[메뉴얼]
+{manual}
+
+[평가 기준]
+{criteria} 
+
 [주의 사항]
 - 정면을 잘 응시했다면 '소통능력'과 '태도' 항목의 점수를 높게 주세요.
 - 고개 움직임이 안정적이라면 '감정조절'과 '전문성' 점수도 높게 평가해 주세요.
 - 반대로 시선을 회피하거나, 고개를 자주 움직이면 해당 항목 점수를 낮춰 주세요.
 {additional_notes}
-
-위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평도 작성해 주세요:
-
-1. 친절도
-2. 문제해결능력
-3. 소통능력
-4. 전문성
-5. 감정조절
-6. 태도
-
-[출력 예시]
-- 친절도: 4.5
-- 문제해결능력: 4.0
-...
-- 총평: 전반적으로 안정적인 태도와 정중한 언행을 보였습니다.
 """
 
     response = client.chat.completions.create(
