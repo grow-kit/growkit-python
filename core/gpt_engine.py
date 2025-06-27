@@ -6,7 +6,6 @@ from fastapi import HTTPException
 import httpx
 import re
 
-
 ## 최신버전은 이 방법을 사용해야 한다 ##
 load_dotenv()  # .env 파일에서 환경변수 로드
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # 명시적으로 전달
@@ -28,6 +27,8 @@ async def fetch_manual(manual_id: int) -> str:
         raise ValueError(f"메뉴얼 ID {manual_id}에 content가 존재하지 않습니다.")
 
     return content
+
+
 # end def
 
 
@@ -60,7 +61,7 @@ async def generate_question_with_manual(manual_id: int):
     - 절대 예시, 번호, 유형 등을 넣지 마.
     - 무조건 하나의 상황만 작성해.
     - 출력은 단 한 문장만. 다른 말, 설명, 앞말 없이 바로 "상황 설명 : ..." 형식으로만 출력.
-    
+
     [출력 예시]
     상황 설명 : 한 고객이 주문한 음료를 받고 나서, 맛이 다르다며 불만을 제기하고 있습니다.
 
@@ -81,6 +82,8 @@ async def generate_question_with_manual(manual_id: int):
         temperature=0.7
     )
     return response.choices[0].message.content
+
+
 # end def
 
 
@@ -122,9 +125,66 @@ def extract_scores_from_text(feedback_text: str) -> dict:
     return scores
 # end def
 
+# 메뉴얼 받아오기 함수
+async def fetch_manual(manual_id: int) -> str:
+    url = f"http://localhost:9000/api/manuals/{manual_id}"
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url)
 
-def generate_feedback(question: str, answer: str, emotion: dict):
+    if res.status_code != 200:
+        raise ValueError(f"메뉴얼 ID {manual_id}에 해당하는 데이터를 찾을 수 없습니다.")
+
+    data = res.json()
+    content = data.get("content")
+
+    if not content:
+        raise ValueError(f"메뉴얼 ID {manual_id}에 content가 존재하지 않습니다.")
+
+    return content
+# end def
+
+# 평가 기준 받아오기 함수
+async def fetch_criteria(criteria_id: int) -> str:
+    url = f"http://localhost:9000/api/criteria/{criteria_id}"
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url)
+    if res.status_code != 200:
+        raise ValueError("평가 기준 없음")
+    return res.json().get("guideline", "")
+
+
+def generate_feedback_with_criteria(question, answer, emotion, manual, criteria):
+    # 기본 반환 형식
+    result = {
+        "question": question,
+        "answer": answer.strip(),  # 항상 포함!
+        "feedback": "",
+        "score": {}
+    }
+
+    # 1. 답변 무효 조건 처리
+    if answer.strip() == "음성 인식 실패" or len(answer.strip()) < 5:
+        result["feedback"] = "⚠️ 답변이 정상적으로 인식되지 않아 평가가 불가능합니다. 문의 후 재평가 요청을 진행해 주세요."
+        result["score"] = {}
+        return result
+
+    # 2. 정상 분석 수행
+    gaze = emotion.get("gaze", "알 수 없음")
+    head = emotion.get("head", "알 수 없음")
+
+    additional_notes = ""
+    if gaze == "알 수 없음":
+        additional_notes += "- 시선 정보가 없으므로 '소통능력'과 '태도' 평가에는 반영하지 마세요.\n"
+    if head == "알 수 없음":
+        additional_notes += "- 고개 움직임 정보가 없으므로 '감정조절'과 '전문성' 평가에는 반영하지 마세요.\n"
+
     prompt = f"""
+[메뉴얼]
+{manual}
+
+[평가 기준]
+{criteria}
+
 [문제]
 {question}
 
@@ -132,21 +192,22 @@ def generate_feedback(question: str, answer: str, emotion: dict):
 {answer}
 
 [시선/고개 움직임 분석 결과]
-- 시선 방향: {emotion.get("gaze", "알 수 없음")}
-- 고개 움직임: {emotion.get("head", "알 수 없음")}
+- 시선 방향: {gaze}
+- 고개 움직임: {head}
 
 [주의 사항]
 - 정면을 잘 응시했다면 '소통능력'과 '태도' 항목의 점수를 높게 주세요.
 - 고개 움직임이 안정적이라면 '감정조절'과 '전문성' 점수도 높게 평가해 주세요.
 - 반대로 시선을 회피하거나, 고개를 자주 움직이면 해당 항목 점수를 낮춰 주세요.
+{additional_notes}
 
-위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평(분석 + 피드백)도 작성해 주세요:
+위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평도 작성해 주세요:
 
-1. 친절함
+1. 친절도
 2. 문제해결능력
-3. 전달력
+3. 소통능력
 4. 전문성
-5. 침착성
+5. 감정조절
 6. 태도
 
 [출력 예시]
@@ -163,11 +224,7 @@ def generate_feedback(question: str, answer: str, emotion: dict):
     )
 
     feedback_text = response.choices[0].message.content
+    result["feedback"] = feedback_text
+    result["score"] = extract_scores_from_text(feedback_text)
 
-    scores = extract_scores_from_text(feedback_text)
-
-    return {
-        "feedback": feedback_text,  # 전체 피드백 텍스트
-        "score": scores             # ✅ 항목별 점수 딕셔너리
-    }
-#end def
+    return result

@@ -5,7 +5,7 @@
 import os
 from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 from domains.evaluation.schemas import EvaluationRequest, AnalysisResult
-from core.gpt_engine import generate_question_with_manual, generate_feedback
+from core.gpt_engine import generate_question_with_manual, fetch_manual, fetch_criteria,generate_feedback_with_criteria
 from domains.evaluation.service import analyze_video_all
 
 router = APIRouter()
@@ -32,12 +32,12 @@ async def get_question(manual_id: int):
 # end def
 
 
-# 분석 및 피드백 요청
-@router.post("/analyze-response")
-async def analyze_response(request: EvaluationRequest):
-    result = generate_feedback(request.question, request.answer, request.emotion)
-    return result
-# end def
+# # 분석 및 피드백 요청
+# @router.post("/analyze-response")
+# async def analyze_response(request: EvaluationRequest):
+#     result = generate_feedback(request.question, request.answer, request.emotion)
+#     return result
+# # end def
 
 
 @router.post("/audio-video", response_model=AnalysisResult)
@@ -55,25 +55,38 @@ async def analyze_from_single_video(video: UploadFile = File(...)):
 
 @router.post("/submit-answer")
 async def submit_answer(
-        video: UploadFile = File(...),
-        question: str = Form(...)
+    video: UploadFile,
+    question: str = Form(...),
+    manual_id: int = Form(...),
+    criteria_id: int = Form(...)
 ):
     binary = await video.read()
 
-    # 1. 분석 수행 (STT + 시선/고개)
     analysis = analyze_video_all(binary)
-
-    # 2. 분석 결과 정리
-    answer = analysis["text"]
+    answer = analysis.get("text", "").strip()
     emotion_data = {
-        "gaze": analysis["gaze_direction"],
-        "head": analysis["head_motion"]
+        "gaze": analysis.get("gaze_direction", "알 수 없음"),
+        "head": analysis.get("head_motion", "알 수 없음")
     }
 
-    # 3. GPT 채점/피드백 생성
-    gpt_result = generate_feedback(question, answer, emotion_data)
+    # 🎯 answer가 비정상일 경우 고정 응답
+    if not answer or answer == "음성 인식 실패" or len(answer) < 5:
+        return {
+            "question": question,
+            "answer": answer,
+            "gaze": emotion_data["gaze"],
+            "head": emotion_data["head"],
+            "score": {},
+            "feedback": "⚠️ 답변이 정상적으로 인식되지 않아 평가가 불가능합니다. 문의 후 재평가 요청을 진행해 주세요."
+        }
 
-    # 4. 결과 응답
+    manual = await fetch_manual(manual_id)
+    criteria = await fetch_criteria(criteria_id)
+
+    gpt_result = generate_feedback_with_criteria(
+        question, answer, emotion_data, manual, criteria
+    )
+
     return {
         "question": question,
         "answer": answer,
