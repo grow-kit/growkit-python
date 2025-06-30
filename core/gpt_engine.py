@@ -6,7 +6,6 @@ from fastapi import HTTPException
 import httpx
 import re
 
-
 ## 최신버전은 이 방법을 사용해야 한다 ##
 load_dotenv()  # .env 파일에서 환경변수 로드
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # 명시적으로 전달
@@ -60,9 +59,15 @@ async def generate_question_with_manual(manual_id: int):
     - 절대 예시, 번호, 유형 등을 넣지 마.
     - 무조건 하나의 상황만 작성해.
     - 출력은 단 한 문장만. 다른 말, 설명, 앞말 없이 바로 "상황 설명 : ..." 형식으로만 출력.
-    
+    - 혹시나 대화 응답을 해야하는 상황이라면 상황 설명 이후 대화를 추가로 출력해줘. 대화 상황이 아니라면 상황 설명만 출력해.
+
     [출력 예시]
     상황 설명 : 한 고객이 주문한 음료를 받고 나서, 맛이 다르다며 불만을 제기하고 있습니다.
+    대화 : "아니 제가 분명 바닐라 라떼를 시켰는데, 그냥 카페라떼가 나온거 아니에요?"
+    
+    or
+    
+    상황 설명 : 현재 예상하지 못한 지진이 발생하여 매장 내부가 패닉에 빠졌습니다. 이 상황을 대처하기 위한 행동을 말하세요.
 
     ※ 절대 여러 상황을 나열하지 말 것.
     ※ 절대 문제 번호, 예시, 유형 등의 문구를 포함하지 말 것.
@@ -110,9 +115,7 @@ def extract_scores_from_text(feedback_text: str) -> dict:
     """GPT 출력에서 항목별 점수를 파싱"""
     criteria = ["친절도", "문제해결능력", "소통능력", "전문성", "감정조절", "태도"]
     scores = {}
-
     for criterion in criteria:
-        # 예: "친절도: 4.5" 또는 "친절도 : 5"
         match = re.search(rf"{criterion}\s*[:：]\s*(\d+(\.\d+)?)", feedback_text)
         if match:
             scores[criterion] = round(float(match.group(1)))
@@ -122,9 +125,80 @@ def extract_scores_from_text(feedback_text: str) -> dict:
     return scores
 # end def
 
+def is_meaningless(text: str) -> bool:
+    stripped = text.strip()
+    if len(stripped) < 5:
+        return True
+    if re.fullmatch(r"[ㄱ-ㅎㅏ-ㅣ]+", stripped):
+        return True
+    if stripped in {"ㄷㄷㄷ", "ㅋㅋㅋ", "ㅎㅎㅎ", "ㅁㅁㅁ", "ㅠㅠㅠ", "...", "....."}:
+        return True
+    return False
+# end def
 
-def generate_feedback(question: str, answer: str, emotion: dict):
-    prompt = f"""
+# 평가 기준 받아오기 함수
+async def fetch_criteria(criteria_id: int) -> str:
+    url = f"http://localhost:9000/api/criteria/{criteria_id}"
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url)
+    if res.status_code != 200:
+        raise ValueError("평가 기준 없음")
+    return res.json().get("guideline", "")
+
+
+def generate_feedback_with_criteria(question, answer, emotion, manual, criteria):
+    # 기본 반환 형식
+    result = {
+        "question": question,
+        "answer": answer.strip(),  # 항상 포함!
+        "feedback": "",
+        "score": {}
+    }
+
+    # 1. 답변 무효 조건 처리
+    if is_meaningless(answer):
+        result["feedback"] = "⚠️ 답변이 정상적으로 인식되지 않아 평가가 불가능합니다. 문의 후 재평가 요청을 진행해 주세요."
+        result["score"] = {}
+        return result
+
+    # 2. 정상 분석 수행
+    gaze = emotion.get("gaze", "알 수 없음")
+    head = emotion.get("head", "알 수 없음")
+
+    additional_notes = ""
+    if gaze == "알 수 없음":
+        additional_notes += "- 시선 정보가 없으므로 '소통능력'과 '태도' 평가에는 반영하지 마세요.\n"
+    if head == "알 수 없음":
+        additional_notes += "- 고개 움직임 정보가 없으므로 '감정조절'과 '전문성' 평가에는 반영하지 마세요.\n"
+
+    prompt = f"""    
+너는 지금 스타벅스 직원의 모의 시뮬레이션 평가를 담당하고 있어.
+   
+[요청 사항]
+- 메뉴얼을 참고해서 응시자의 답변을 채점 해주세요.
+- 점수 채점을 진행할 때 평가 기준을 참고 해주세요.
+- 각 항목을 5점 만점으로 채점하고, 아래 형식으로 마지막에는 총평을 출력해 주세요.
+- 총평에는 평과 결과와 피드백으로 구성해 주세요.
+- 점수가 낮은 항목(3.5 이하)은 반드시 개선 방향도 함께 제시할 것.
+
+
+위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점해주세요.
+
+1. 친절도
+2. 문제해결능력
+3. 소통능력
+4. 전문성
+5. 감정조절
+6. 태도
+
+※ 각 항목별 점수 옆에 첨언하지 않는다.
+
+[예시 출력 형식]
+- 친절도: 4.5
+- 문제해결능력: 4.0
+...
+- 총평: 전반적으로 침착했으나, 소통의 명확성이 조금 더 필요합니다.
+               
 [문제]
 {question}
 
@@ -132,28 +206,20 @@ def generate_feedback(question: str, answer: str, emotion: dict):
 {answer}
 
 [시선/고개 움직임 분석 결과]
-- 시선 방향: {emotion.get("gaze", "알 수 없음")}
-- 고개 움직임: {emotion.get("head", "알 수 없음")}
+- 시선 방향: {gaze}
+- 고개 움직임: {head}
+
+[메뉴얼]
+{manual}
+
+[평가 기준]
+{criteria} 
 
 [주의 사항]
 - 정면을 잘 응시했다면 '소통능력'과 '태도' 항목의 점수를 높게 주세요.
 - 고개 움직임이 안정적이라면 '감정조절'과 '전문성' 점수도 높게 평가해 주세요.
 - 반대로 시선을 회피하거나, 고개를 자주 움직이면 해당 항목 점수를 낮춰 주세요.
-
-위 내용을 참고하여, 다음 6가지 항목에 대해 각각 5점 만점 기준으로 채점하고, 간단한 설명과 함께 총평(분석 + 피드백)도 작성해 주세요:
-
-1. 친절함
-2. 문제해결능력
-3. 전달력
-4. 전문성
-5. 침착성
-6. 태도
-
-[출력 예시]
-- 친절도: 4.5
-- 문제해결능력: 4.0
-...
-- 총평: 전반적으로 안정적인 태도와 정중한 언행을 보였습니다.
+{additional_notes}
 """
 
     response = client.chat.completions.create(
@@ -163,11 +229,8 @@ def generate_feedback(question: str, answer: str, emotion: dict):
     )
 
     feedback_text = response.choices[0].message.content
+    result["feedback"] = feedback_text
+    result["score"] = extract_scores_from_text(feedback_text)
 
-    scores = extract_scores_from_text(feedback_text)
-
-    return {
-        "feedback": feedback_text,  # 전체 피드백 텍스트
-        "score": scores             # ✅ 항목별 점수 딕셔너리
-    }
+    return result
 #end def
