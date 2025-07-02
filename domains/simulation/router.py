@@ -29,13 +29,17 @@ class HintsRequest(BaseModel):
 class EducationalAnalysisRequest(BaseModel):
     userid: str
     companyid: int
-    userorder: List[int]  # [144, 132, 162, 154, 112] - 실제 시나리오 ID들
+    userorder: List[int]  
     reason: str
-    responseTexts: Dict[str, str]  # {"144": "멘트1", "132": "멘트2", ...}
-    hints: Dict[str, str]  # {"144": "힌트1", "132": "힌트2", ...}
+    responseTexts: Dict[str, str] 
+    hints: Dict[str, str] 
     orderSelectionTime: int
     reasonWritingTime: int
     totalTimeSpent: int
+    
+    # ✅ 추가: 시나리오 정보
+    scenarioContents: Dict[str, str] = {}  
+    scenarioTags: Dict[str, str] = {}      
 
 # 무의미한 입력 검증 함수
 def validate_response_text(text: str) -> bool:
@@ -84,24 +88,28 @@ def get_invalid_responses(request: EducationalAnalysisRequest) -> List[str]:
             invalid_responses.append(scenario_id)
     return invalid_responses
 
-# 시나리오 내용 매핑 함수
-def get_scenario_info_by_id(scenario_id: int) -> Dict[str, str]:
+# 시나리오 내용 매핑 함수 - ✅ 수정된 버전
+def get_scenario_info_by_id(scenario_id: int, request: EducationalAnalysisRequest = None) -> Dict[str, str]:
     """실제 시나리오 ID를 받아서 내용과 태그 반환"""
-    # 기본 시나리오 패턴 매핑 (실제로는 DB에서 조회하거나 요청에서 받은 정보 사용)
+    
+    # ✅ 요청에서 실제 시나리오 정보가 있으면 사용
+    if request and request.scenarioContents:
+        scenario_id_str = str(scenario_id)
+        if scenario_id_str in request.scenarioContents:
+            return {
+                "content": request.scenarioContents[scenario_id_str],
+                "tags": request.scenarioTags.get(scenario_id_str, "")
+            }
+    
+    # ❌ 기존 추측 로직 (백업용으로만 사용)
     scenario_patterns = {
-        # 커피머신 관련
         "coffee": {"content": "커피머신이 작동하지 않음", "tags": "출근조,기기고장"},
-        # 주문 취소 관련  
         "cancel": {"content": "고객이 음료 주문을 취소하겠다고 함", "tags": "고객클레임,주문관리"},
-        # 신입직원 관련
         "newbie": {"content": "신입 직원이 계산을 틀려서 당황함", "tags": "신입교육,실수처리"},
-        # 대기 고객 관련
         "waiting": {"content": "매장에 고객이 줄을 서서 대기 중", "tags": "혼잡상황,대기관리"},
-        # 배달 주문 관련
         "delivery": {"content": "배달 주문이 5건 동시에 들어옴", "tags": "배달,다중업무"}
     }
     
-    # 기본값 반환 (실제로는 더 정교한 매핑 필요)
     patterns = list(scenario_patterns.keys())
     pattern_index = (scenario_id % len(patterns))
     pattern_key = patterns[pattern_index]
@@ -113,7 +121,8 @@ def build_scenarios_info_from_request(request: EducationalAnalysisRequest) -> st
     scenarios_info = ""
     
     for i, scenario_id in enumerate(request.userorder, 1):
-        scenario_info = get_scenario_info_by_id(scenario_id)
+        # ✅ 수정: request를 함께 전달
+        scenario_info = get_scenario_info_by_id(scenario_id, request)
         scenarios_info += f"{i}. {scenario_info['content']} ({scenario_info['tags']})\n"
     
     return scenarios_info
@@ -177,6 +186,7 @@ async def educational_analysis(request: EducationalAnalysisRequest):
     
     print(f"교육용 분석 요청 - 사용자: {request.userid}")
     print(f"선택한 순서 (실제 ID): {request.userorder}")
+    print(f"시나리오 정보: {request.scenarioContents}")
     print(f"사용자 이유: {request.reason}")
     
     # 무의미한 입력 검증
@@ -202,7 +212,7 @@ async def educational_analysis(request: EducationalAnalysisRequest):
         print("🔄 GPT API 호출 중...")
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": educational_prompt}],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=4000
         )
@@ -228,7 +238,7 @@ async def educational_analysis(request: EducationalAnalysisRequest):
                 return create_improved_default_educational_analysis(request, invalid_responses)
         
         # 사용자 순서 정보 추가 (실제 시나리오 ID 사용)
-        analysis_result["userOrder"] = format_user_order_with_real_ids(request.userorder)
+        analysis_result["userOrder"] = format_user_order_with_real_ids(request.userorder, request)
         
         return analysis_result
         
@@ -435,7 +445,8 @@ def generate_educational_analysis_prompt(request: EducationalAnalysisRequest, gp
     # 사용자가 선택한 순서를 텍스트로 변환 (1~5 순서 기준)
     user_order_text = ""
     for i, scenario_id in enumerate(request.userorder):
-        scenario_info = get_scenario_info_by_id(scenario_id)
+        # ✅ 수정: request를 함께 전달
+        scenario_info = get_scenario_info_by_id(scenario_id, request)
         user_order_text += f"{i+1}순위: {scenario_info['content']} (ID: {scenario_id})\n"
     
     # GPT 추천 순서를 텍스트로 변환 (1~5 순서 기준)
@@ -444,13 +455,15 @@ def generate_educational_analysis_prompt(request: EducationalAnalysisRequest, gp
         # position은 1~5 중 하나, 이는 사용자 선택 순서의 인덱스를 의미
         if position <= len(request.userorder):
             actual_scenario_id = request.userorder[position - 1]
-            scenario_info = get_scenario_info_by_id(actual_scenario_id)
+            # ✅ 수정: request를 함께 전달
+            scenario_info = get_scenario_info_by_id(actual_scenario_id, request)
             gpt_order_text += f"{i+1}순위: {scenario_info['content']} (ID: {actual_scenario_id})\n"
     
     # 각 시나리오별 멘트 (실제 ID 기준)
     response_texts = ""
     for i, scenario_id in enumerate(request.userorder, 1):
-        scenario_info = get_scenario_info_by_id(scenario_id)
+        # ✅ 수정: request를 함께 전달
+        scenario_info = get_scenario_info_by_id(scenario_id, request)
         response_text = request.responseTexts.get(str(scenario_id), "")
         
         # 무의미한 입력인지 체크
@@ -536,12 +549,13 @@ def generate_educational_analysis_prompt(request: EducationalAnalysisRequest, gp
     
     return prompt
 
-def format_user_order_with_real_ids(userorder: List[int]) -> dict:
+def format_user_order_with_real_ids(userorder: List[int], request: EducationalAnalysisRequest = None) -> dict:
     """실제 시나리오 ID를 사용한 사용자 순서 정보 포맷팅"""
     
     formatted_order = []
     for i, scenario_id in enumerate(userorder):
-        scenario_info = get_scenario_info_by_id(scenario_id)
+        # ✅ 수정: request를 함께 전달
+        scenario_info = get_scenario_info_by_id(scenario_id, request)
         formatted_order.append({
             "priority": i + 1,
             "scenarioId": scenario_id,
@@ -635,11 +649,12 @@ def create_improved_default_educational_analysis(request: EducationalAnalysisReq
     for i, position in enumerate(gpt_order, 1):
         if position <= len(request.userorder):
             actual_scenario_id = request.userorder[position - 1]
-            scenario_info = get_scenario_info_by_id(actual_scenario_id)
+            # ✅ 수정: request를 함께 전달
+            scenario_info = get_scenario_info_by_id(actual_scenario_id, request)
             formatted_order_list.append(f"{i}순위: {scenario_info['content']}")
     
     return {
-        "userOrder": format_user_order_with_real_ids(request.userorder),
+        "userOrder": format_user_order_with_real_ids(request.userorder, request),
         "participationFeedback": participation_feedback,
         "scenarioCoaching": coaching,
         "orderAnalysis": order_analysis,
