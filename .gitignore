@@ -1,22 +1,19 @@
-# Python
-__pycache__/
-*.py[cod]
-
-# 가상환경
-.venv/
 #가상 환경
 venv/
 
-# IDE
-.idea/
-.vscode/
+.venv/
 #파이썬 캐시
 __pycache__/
 *.pyc
-
+*.py[cod]
 #환경 변수
-# 환경 설정
 .env
+
+
+## 교육
+# IDE
+.idea/
+.vscode/
 
 # 업로드 및 대용량 파일
 input/

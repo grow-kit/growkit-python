@@ -154,6 +154,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
 python-json-logger==3.2.1
 python-multipart==0.0.20
+python-pptx==1.0.2
 pytz==2025.2
 pywin32==308
 pywinpty==2.0.15
@@ -217,10 +218,3 @@ wordcloud==1.9.4
 wrapt==1.14.1
 wsproto==1.2.0
 xyzservices==2025.1.0
-
-fastapi~=0.115.12
-uvicorn
-python-pptx~=1.0.2
-openai~=1.87.0
-python-dotenv~=1.1.0
-pydantic~=2.11.7
